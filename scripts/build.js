@@ -1,0 +1,2 @@
+import { cp, mkdir, rm } from 'node:fs/promises'
+await rm('dist',{recursive:true,force:true});await mkdir('dist/src',{recursive:true});await cp('index.html','dist/index.html');for(const file of ['main.js','calculations.js','styles.css'])await cp(`src/${file}`,`dist/src/${file}`);console.log('Built static app in dist/')
