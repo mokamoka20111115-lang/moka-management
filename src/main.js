@@ -1,4 +1,5 @@
 import { calculateDay, calculateMonth, emptyEntry, localDate, numberFields } from './calculations.js'
+import { moveMonth } from './monthNavigation.js'
 
 const yen=n=>`¥${Math.round(n).toLocaleString('ja-JP')}`, pct=n=>`${n.toFixed(1)}%`, currentMonth=localDate().slice(0,7)
 const seed=[
@@ -19,7 +20,7 @@ function render(){const data=entries.filter(e=>e.date.startsWith(month)).sort((a
 <section class="target"><div class="target-icon">${icon('wallet')}</div><div class="target-copy"><span>月商目標 <b>¥1,000,000</b></span><strong>あと ${yen(Math.max(1000000-totals.sales,0))}</strong><div class="progress"><i style="width:${target}%"></i></div></div><div class="rate"><strong>${pct(target)}</strong><span>達成率</span></div></section>
 <section class="dashboard-grid"><article class="panel chart-panel"><header><div><span class="eyebrow">SALES TREND</span><h2>日別売上推移</h2></div><span class="legend"><i></i>総売上</span></header>${data.length?chart(data):'<div class="empty">この月のデータはまだありません</div>'}</article>
 <article class="panel records"><header><div><span class="eyebrow">RECENT RECORDS</span><h2>営業データ</h2></div></header><div class="record-list">${data.length?data.slice().reverse().map(e=>{const d=calculateDay(e);return `<button data-edit="${e.date}"><span class="date-badge"><b>${+e.date.slice(8)}</b><small>日</small></span><span class="record-money"><small>総売上</small><b>${yen(d.sales)}</b></span><span class="record-profit"><small>粗利益</small><b>${yen(d.grossProfit)}</b></span>${icon('edit')}</button>`}).join(''):'<div class="empty">データを入力してください</div>'}</div></article></section></main>`
-  app.querySelector('[data-new]').onclick=()=>openModal(emptyEntry());app.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{const d=new Date(`${month}-01T00:00:00`);d.setMonth(d.getMonth()+Number(b.dataset.move));month=d.toISOString().slice(0,7);render()});app.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openModal(entries.find(e=>e.date===b.dataset.edit)))
+  app.querySelector('[data-new]').onclick=()=>openModal(emptyEntry());app.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>{month=moveMonth(month,Number(b.dataset.move));render()});app.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openModal(entries.find(e=>e.date===b.dataset.edit)))
 }
 const money=(label,name,value)=>`<label class="money-input"><span>${label}</span><div><b>¥</b><input inputmode="numeric" name="${name}" value="${value||''}" placeholder="0"></div></label>`
 function openModal(initial){const oldDate=initial.date, wrap=document.createElement('div');wrap.className='overlay';wrap.innerHTML=`<div class="modal"><header><div><span class="eyebrow">DAILY RECORD</span><h2>営業データを入力</h2></div><button class="icon-btn" data-close aria-label="閉じる">${icon('close')}</button></header><form><div class="modal-body"><label class="date-field">${icon('calendar')}<span>営業日</span><input name="date" type="date" value="${initial.date}" required></label>
