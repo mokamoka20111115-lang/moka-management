@@ -2,6 +2,7 @@ import { calculateDay, calculateMonth, emptyEntry, localDate, numberFields } fro
 import { bindBackupControls } from './backupUI.js'
 import { openMigration } from './migrationUI.js'
 import { validateEntries, createBackup, STORAGE_KEY } from './backup.js'
+import { isStandalone, loginErrorMessage } from './googleLogin.js'
 import { moveMonth } from './monthNavigation.js'
 
 const yen=n=>`¥${Math.round(n).toLocaleString('ja-JP')}`, pct=n=>`${n.toFixed(1)}%`, currentMonth=localDate().slice(0,7)
@@ -9,7 +10,7 @@ const seed=[
   [1,48500,12800,8960,8200,6150,4300,3440,15200,2100],[2,42000,9500,6650,6800,5100,3600,2880,13800,1600],[3,56700,15200,10640,9200,6900,5100,4080,18100,2400],[4,39800,8800,6160,7100,5325,2900,2320,12100,1200],[5,61200,18400,12880,10500,7875,6200,4960,21200,3200],[6,58400,16600,11620,9800,7350,5400,4320,19500,2800],[7,36200,7900,5530,5900,4425,2500,2000,11000,900]
 ].map(v=>Object.fromEntries(['date',...numberFields].map((k,i)=>[k,i? v[i]:`${currentMonth}-${String(v[0]).padStart(2,'0')}`])))
 let entries=[], demo=false, localValid=true, month=currentMonth
-let user=null, cloud=null, snapshot=null, authClient=null, authLoading=true, status='この端末に保存しています', session=0, reloadRequest=0, busy=false
+let user=null, cloud=null, snapshot=null, authClient=null, authLoading=true, authWorking=false, authPreparationError='', status='この端末に保存しています', session=0, reloadRequest=0, busy=false
 const drafts=new Map()
 function loadLocal(){
   try { localValid=true;const raw=localStorage.getItem(STORAGE_KEY);demo=raw===null;entries=demo?seed:validateEntries(JSON.parse(raw)) }
@@ -17,6 +18,7 @@ function loadLocal(){
 }
 loadLocal()
 const errorMessage=error=>{
+  if(error.code?.startsWith('auth/'))return loginErrorMessage(error)
   if(error.code==='permission-denied')return 'アクセスが拒否されました。FirebaseのFirestoreルールを確認してください。'
   if(error.code==='auth/unauthorized-domain')return 'Firebaseの承認済みドメインにこのサイトを追加してください。'
   if(error.code==='auth/popup-blocked')return 'ログイン画面が開けません。Safariでこのサイトを開き、もう一度ログインしてください。'
@@ -44,7 +46,7 @@ function cloudBackupOptions(){
         const verified=await store.load();ensure()
         if(JSON.stringify(verified.entries)!==JSON.stringify(result.entries))throw new Error('保存後に別の更新がありました。最新データを確認してください。')
         snapshot=verified;entries=verified.entries;status='クラウドへ復元済み';return verified.entries
-      }finally{busy=false;const button=app.querySelector('[data-auth]');if(button)button.disabled=authLoading}
+      }finally{busy=false;const button=app.querySelector('[data-auth]');if(button)button.disabled=authLoading||authWorking}
     },
   }
 }
@@ -56,7 +58,7 @@ function chart(data){const vals=data.map(e=>calculateDay(e).sales),max=Math.max(
 
 function render(){const data=entries.filter(e=>e.date.startsWith(month)).sort((a,b)=>a.date.localeCompare(b.date)), totals=calculateMonth(data), costRate=totals.sales?totals.costs/totals.sales*100:0, delivery=data.reduce((s,e)=>s+calculateDay(e).deliverySales,0), target=Math.min(totals.sales/10000,100), label=new Intl.DateTimeFormat('ja-JP',{year:'numeric',month:'long'}).format(new Date(`${month}-01T00:00:00`));app.innerHTML=`
 <aside><div class="brand"><div>${icon('coffee')}</div><span>CAFE REST<br><b>MOKA</b></span></div><nav><a class="active">${icon('chart')}ダッシュボード</a><a>${icon('calendar')}営業データ</a></nav><div class="aside-foot">${icon('store')}<span>カフェレスト モカ<small>経営管理システム</small></span></div></aside>
-<main><section class="cloud-tools"><p data-account></p><button class="ghost" data-auth ${authLoading||busy?'disabled':''}>${user?'ログアウト':'Googleでログイン'}</button>${user?'<button class="ghost" data-reload>最新データを読み込む</button><button class="ghost" data-migrate>この端末の記録をクラウドへ移行</button>':''}<p role="status" aria-live="polite" data-cloud-status></p></section><header class="top"><div><span class="eyebrow">MANAGEMENT DASHBOARD</span><h1>月間ダッシュボード</h1><p>今日も一日、おつかれさまです。</p></div><button class="primary add" data-new>${icon('plus')}営業データを入力</button></header>
+<main><section class="cloud-tools"><p data-account></p><button class="ghost" data-auth ${authLoading||authWorking||busy?'disabled':''}>${authWorking?'ログイン状態を確認中…':user?'ログアウト':'Googleでログイン'}</button>${user?'<button class="ghost" data-reload>最新データを読み込む</button><button class="ghost" data-migrate>この端末の記録をクラウドへ移行</button>':''}<p role="status" aria-live="polite" data-cloud-status></p><p data-auth-help></p></section><header class="top"><div><span class="eyebrow">MANAGEMENT DASHBOARD</span><h1>月間ダッシュボード</h1><p>今日も一日、おつかれさまです。</p></div><button class="primary add" data-new>${icon('plus')}営業データを入力</button></header>
 <section class="backup-tools"><button class="ghost" data-backup>バックアップ</button><button class="ghost" data-restore>復元</button><p>${user ? 'ログイン中のアカウントのクラウドデータを表示しています。バックアップ・復元は全営業記録が対象です。' : demo ? 'サンプル表示です。サンプルはバックアップされません。最初の入力保存から実際の記録を開始します。' : '保存済みデータを表示しています。以前の記録にはサンプルが含まれる可能性があるため、バックアップ前に内容をご確認ください。'}</p></section>
 <section class="month-nav"><button data-move="-1">‹</button><strong>${label}</strong><button data-move="1">›</button></section>
 <section class="stats">${stat('月間累計売上',yen(totals.sales),`${data.length}日分の営業データ`,'main-stat')}${stat('原価',yen(totals.costs),`原価率 ${pct(costRate)}`)}${stat('粗利益',yen(totals.grossProfit),`粗利率 ${pct(totals.sales?totals.grossProfit/totals.sales*100:0)}`,'profit')}${stat('デリバリー手数料',yen(totals.fees),`手数料率 ${pct(delivery?totals.fees/delivery*100:0)}`)}</section>
@@ -65,11 +67,17 @@ function render(){const data=entries.filter(e=>e.date.startsWith(month)).sort((a
 <article class="panel records"><header><div><span class="eyebrow">RECENT RECORDS</span><h2>営業データ</h2></div></header><div class="record-list">${data.length?data.slice().reverse().map(e=>{const d=calculateDay(e);return `<button data-edit="${e.date}"><span class="date-badge"><b>${+e.date.slice(8)}</b><small>日</small></span><span class="record-money"><small>総売上</small><b>${yen(d.sales)}</b></span><span class="record-profit"><small>粗利益</small><b>${yen(d.grossProfit)}</b></span>${icon('edit')}</button>`}).join(''):'<div class="empty">データを入力してください</div>'}</div></article></section></main>`
   app.querySelector('[data-account]').textContent=user?`ログイン中：${user.email||user.displayName||user.uid}`:'未ログイン：この端末の記録を表示しています'
   app.querySelector('[data-cloud-status]').textContent=status
+  app.querySelector('[data-auth-help]').textContent=isStandalone()?'ホーム画面から認証画面が開けない場合は、Safariで公開URLを直接開いて試してください。Safariとホーム画面のログイン状態は共有されない場合があります。':''
   app.querySelector('[data-auth]').onclick=()=>{
+    if(authWorking)return
     if(!authClient){status='ログイン機能を再読み込みしてください。ローカル機能は引き続き使えます。';render();return}
     if(document.querySelector('.overlay')){alert('入力・復元画面を閉じてからログアウトしてください。');return}
+    authWorking=true
+    status=user?'ログアウト中…':'Googleログイン画面を開いています。ボタンを繰り返し押さずにお待ちください。'
+    app.querySelector('[data-cloud-status]').textContent=status
+    const button=app.querySelector('[data-auth]');button.disabled=true
     const promise=user?authClient.logout():authClient.login()
-    promise.catch(error=>{status=errorMessage(error);render()})
+    promise.catch(error=>{status=errorMessage(error)}).finally(()=>{authWorking=false;render()})
   }
   if(user){
     app.querySelector('[data-reload]').onclick=reloadCloud
@@ -85,7 +93,7 @@ function render(){const data=entries.filter(e=>e.date.startsWith(month)).sort((a
           const byDate=new Map(verified.entries.map(entry=>[entry.date,entry]))
           for(const entry of result.entries){if(JSON.stringify(byDate.get(entry.date))!==JSON.stringify(entry))throw new Error('保存後の内容が変わりました。最新データを確認してください。')}
           snapshot=verified;entries=verified.entries;demo=false;status='クラウドへ移行済み';busy=false;render()
-        }finally{busy=false;const button=app.querySelector('[data-auth]');if(button)button.disabled=authLoading}
+        }finally{busy=false;const button=app.querySelector('[data-auth]');if(button)button.disabled=authLoading||authWorking}
       },()=>active===session)
     }
   }
@@ -113,7 +121,7 @@ try{
   }
   wrap.dataset.saving='false';drafts.delete(draftKey);demo=false;month=data.date.slice(0,7);close();busy=false;render()
 }catch(error){wrap.dataset.saving='false';message.textContent='保存失敗：'+errorMessage(error)+' 入力は残っています。';saveButton.disabled=false}
-finally{busy=false;const button=app.querySelector('[data-auth]');if(button)button.disabled=authLoading}};if(draft){const note=document.createElement('p');note.textContent='前回の未保存の入力を表示しています。';form.append(note);const discard=document.createElement('button');discard.type='button';discard.textContent='下書きを破棄';discard.className='ghost';discard.onclick=()=>{if(wrap.dataset.saving==='true')return;drafts.delete(draftKey);close();openModal(originalInitial,newRecord)};form.append(discard)}update();form.querySelector('input').focus()}
+finally{busy=false;const button=app.querySelector('[data-auth]');if(button)button.disabled=authLoading||authWorking}};if(draft){const note=document.createElement('p');note.textContent='前回の未保存の入力を表示しています。';form.append(note);const discard=document.createElement('button');discard.type='button';discard.textContent='下書きを破棄';discard.className='ghost';discard.onclick=()=>{if(wrap.dataset.saving==='true')return;drafts.delete(draftKey);close();openModal(originalInitial,newRecord)};form.append(discard)}update();form.querySelector('input').focus()}
 const group=(title,color,content)=>`<section class="input-group"><h3><span class="dot ${color}"></span>${title}</h3>${content}</section>`
 render()
 
@@ -124,7 +132,7 @@ import('./firebaseClient.js').then(module=>module.initializeFirebase((nextUser,s
   document.querySelectorAll('.overlay').forEach(element=>element.remove())
   user=nextUser;cloud=store;snapshot=null;entries=[];demo=false
   if(user){status='クラウドへ接続しています';reloadCloud()}
-  else{status='この端末に保存しています';loadLocal();render()}
-})).then(client=>{authClient=client;authLoading=false;render()}).catch(error=>{
-  authLoading=false;status='Googleログインの準備に失敗しました。再読み込みをお試しください。ローカル機能は使えます。';render()
+  else{status='この端末に保存しています';loadLocal();if(authPreparationError)status=authPreparationError;render()}
+})).then(async client=>{authClient=client;try{await client.prepareLogin?.()}catch(error){authPreparationError=errorMessage(error);status=authPreparationError}authLoading=false;render()}).catch(error=>{
+  authLoading=false;status='Googleログインの準備に失敗しました。'+(error.code?errorMessage(error):'再読み込みをお試しください。')+' ローカル機能は使えます。';render()
 })

@@ -119,3 +119,29 @@ Firebase Web SDK 10.14.1をGoogleの公式CDNから遅延読み込みします�
 `npm test` は既存の計算・月移動・バックアップ検証に加え、DOMテストダブルによる入力保持・認証切り替え・復元画面の検証と、注入したFirestore APIのテストダブルで保存・移行・復元・競合・通信失敗を検証します。本番Firebaseへ営業データを書き込むテストではありません。
 
 Firebase Rulesのエミュレーターによる実行検証、および本物のGoogle認証・iPhone Safari・ホーム画面での実機確認は、この作業環境では未実施です。Firebaseコンソールでのルール公開と対象端末での確認が必要です。
+
+## iPhoneでGoogleログインが進まない場合
+
+現在のログイン方式はFirebase SDKの `signInWithPopup` です。`authDomain` の `moka-management.firebaseapp.com` はGoogleログインを中継するFirebaseの認証ドメインで、アプリ本体のGitHub Pagesドメインとは異なります。FirestoreのルールはGoogleアカウント選択の前には関係しません。
+
+ログイン準備時に、Firebase SDKの認証ドメイン検証と同じ公開プロジェクト設定APIを読み、公開アプリのホストが承認済みか確認します。未登録・無効なAPIキー・APIのアクセス制限・通信失敗を認証画面へ移動する前に表示します。準備に失敗した場合は設定を直してアプリを再読み込みしてください。ローカル機能は維持します。
+
+ログイン処理中はボタンを無効にし、1つの認証要求だけを実行します。連打で先に開いたポップアップの認証がキャンセルされる問題を防ぎます。エラーは日本語と `auth/...` のコードを表示します。トークン・eventId・認証URLを診断ログとして保存しません。
+
+「The requested action is invalid.」はFirebase認証ページが要求を受け付けられなかった表示で、文言だけで原因は一意に判定できません。今回のコード調査では、アプリが認証URLを独自に作っていたり、Firebase設定値が別の値に書き換わっていたりする問題は見つかっていません。次の順に確認してください。
+
+1. Firebase Authentication → 設定 → 承認済みドメインに `mokamoka20111115-lang.github.io` があることを確認します。`/moka-management/` は入れません。
+2. ホーム画面からではなく、Safariの通常タブで公開URLを直接開き、ボタンを1回押します。Safariとホーム画面アプリのログイン状態は共有されない場合があります。
+3. アプリ側に表示される `auth/...` のエラーコードを確認します。認証タブにだけエラーが出た場合は、そのタブを閉じてアプリ側のエラーも確認します。
+4. 承認済みドメインが正しくても失敗する場合は、GoogleプロバイダのWeb SDK設定、サポートメール、Google OAuthクライアントとAPIキーの制限を確認します。必要な制限だけを正しく設定し、制限を一律に解除しないでください。
+5. 追加調査には、Safariでも同じエラーか、認証ページのパスが `/__/auth/handler` か、URLの `authType` が `signInViaPopup` か、`providerId` が `google.com` かを確認します。完全な認証URL、eventId、state、トークンを共有する必要はありません。
+
+### signInWithRedirectに単純変更しない理由
+
+GitHub PagesとFirebase認証ヘルパーが別ドメインのまま `signInWithRedirect` / `getRedirectResult` を追加すると、Safariの第三者ストレージ制限によって、認証後の結果を元のアプリで取得できないことがあります。iPhoneだからという理由で自動的にリダイレクトへ切り替える処理は入れていません。
+
+リダイレクト方式での対応が必要な場合は、Firebase Hostingなどでアプリと認証ヘルパーを同一ドメインにする、または公式のプロキシ/ヘルパー構成へ対応する作業が別途必要です。GitHub Pagesは認証ヘルパーへの動的なリバースプロキシを提供しません。公開先を移す場合は、元のSafariのlocalStorageが別ドメインへ自動的に移らないため、先にJSONバックアップまたはクラウド移行を完了させます。
+
+公式情報：https://firebase.google.com/docs/auth/web/redirect-best-practices
+
+今回の自動テストは、設定検証、ポップアップ開始前のチェック、連打防止、再試行、エラー表示と既存機能をテストダブルで検証します。本物のGoogleログインやiPhone Safari/ホーム画面アプリの認証完了を確認したものではありません。

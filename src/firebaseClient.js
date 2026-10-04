@@ -1,3 +1,4 @@
+import { checkLoginDomain, createGoogleLogin } from './googleLogin.js'
 import { createCloudStore } from './cloudData.js'
 // Firebase Web設定は公開用。管理者鍵やパスワードは含めない。
 const config = {
@@ -33,9 +34,10 @@ export async function initializeFirebase(onUser) {
   authSdk.onAuthStateChanged(auth, user => onUser(user, user ? createCloudStore(api, user.uid) : null))
   const provider = new authSdk.GoogleAuthProvider()
   provider.setCustomParameters({ prompt: 'select_account' })
+  const loginClient = createGoogleLogin(authSdk, auth, provider, () => checkLoginDomain(config, globalThis.location.href))
   return {
-    // 呼び出し前にSDKを読み込み済みにし、ボタンの直接操作でポップアップを開く。
-    login: () => authSdk.signInWithPopup(auth, provider),
+    prepareLogin: () => loginClient.prepareLogin(),
+    login: () => loginClient.login(),
     logout: () => authSdk.signOut(auth),
   }
 }
