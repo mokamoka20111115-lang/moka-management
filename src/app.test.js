@@ -4,16 +4,17 @@ import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 import { environment } from '../test-support/dom.js'
 import * as calculations from './calculations.js'
+import { isStandalone, loginErrorMessage } from './googleLogin.js'
 import { moveMonth } from './monthNavigation.js'
 import { bindBackupControls } from './backupUI.js'
 import { openMigration } from './migrationUI.js'
 import { validateEntries, createBackup, STORAGE_KEY } from './backup.js'
 const tick=async()=>{for(let i=0;i<12;i++)await Promise.resolve()}
-async function appHarness({failSdk=false}={}) {
+async function appHarness({failSdk=false,login=async()=>{},prepareLogin}={}) {
   const env=environment();Object.assign(globalThis,{document:env.document,localStorage:env.localStorage})
   let authChange
   const source=(await readFile(new URL('./main.js',import.meta.url),'utf8')).replace(/^import .* from .*\n/gm,'').replace("import('./firebaseClient.js')",'__firebaseImport()')
-  const context={...env,...calculations,moveMonth,bindBackupControls,openMigration,validateEntries,createBackup,STORAGE_KEY,console,alert:()=>{},__firebaseImport:()=>failSdk?Promise.reject(new Error('SDK offline')):Promise.resolve({initializeFirebase:async callback=>{authChange=callback;callback(null,null);return {login:async()=>{},logout:async()=>callback(null,null)}}})}
+  const context={...env,...calculations,moveMonth,isStandalone,loginErrorMessage,bindBackupControls,openMigration,validateEntries,createBackup,STORAGE_KEY,console,alert:()=>{},__firebaseImport:()=>failSdk?Promise.reject(new Error('SDK offline')):Promise.resolve({initializeFirebase:async callback=>{authChange=callback;callback(null,null);return {login,prepareLogin,logout:async()=>callback(null,null)}}})}
   vm.runInNewContext(source,context);await tick()
   return {...env,authChange:async(user,store)=>{authChange(user,store);await tick()}}
 }
@@ -117,4 +118,17 @@ test('未保存入力を開き直して復元し、明示的に下書きを破�
   const discard=modal.form.querySelectorAll('button').find(button=>button.textContent==='下書きを破棄')
   assert.ok(discard);discard.click()
   assert.equal(modalForm(env).input.value,'')
+})
+test('ログイン中はボタンを無効にし、連打しても1回だけ認証を開始する',async()=>{
+  let calls=0,resolve
+  const env=await appHarness({login:()=>{calls++;return new Promise(done=>{resolve=done})}})
+  const button=env.app.querySelector('[data-auth]');button.click();button.click()
+  assert.equal(calls,1);assert.equal(button.disabled,true)
+  assert.match(env.app.querySelector('[data-cloud-status]').textContent,/繰り返し押さず/)
+  resolve();await tick()
+  assert.equal(env.app.querySelector('[data-auth]').disabled,false)
+})
+test('認証準備エラーを汎用メッセージに隠さず表示する',async()=>{
+  const env=await appHarness({prepareLogin:async()=>{throw Object.assign(new Error('承認済みドメインを追加してください'),{code:'auth/unauthorized-domain'})}})
+  assert.match(env.app.querySelector('[data-cloud-status]').textContent,/auth\/unauthorized-domain/)
 })
