@@ -30,13 +30,13 @@ export function summarize(entries) {
   return { count: sorted.length, first: sorted[0]?.date || null, last: sorted.at(-1)?.date || null }
 }
 
-export function createBackup(raw, now = new Date()) {
+export function createBackup(raw, now = new Date(), source = 'localStorage') {
   // 表示用サンプルではなく、保存されている値だけを読み取る。
   if (raw === null) throw new Error('保存済みの営業データがありません。表示中のサンプルはバックアップしません。')
   let entries
   try { entries = JSON.parse(raw) } catch { throw new Error('保存データが読めません。元のデータは変更していません。') }
   return { format: 'moka-management-backup', version: 1, exportedAt: now.toISOString(),
-    source: 'localStorage', sampleStatus: 'unverified', entries: validateEntries(entries) }
+    source, sampleStatus: 'unverified', entries: validateEntries(entries) }
 }
 
 export function parseBackup(text) {
@@ -44,7 +44,7 @@ export function parseBackup(text) {
   let data
   try { data = JSON.parse(text.replace(/^\uFEFF/, '')) } catch { throw new Error('JSONファイルを読み取れません。') }
   if (!data || data.format !== 'moka-management-backup' || data.version !== 1 ||
-      data.source !== 'localStorage' || data.sampleStatus !== 'unverified' ||
+      !['localStorage', 'firestore'].includes(data.source) || data.sampleStatus !== 'unverified' ||
       typeof data.exportedAt !== 'string' || !Number.isFinite(Date.parse(data.exportedAt))) {
     throw new Error('このアプリのバックアップファイルではないか、未対応の形式です。')
   }
