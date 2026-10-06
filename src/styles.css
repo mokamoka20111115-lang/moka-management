@@ -6,3 +6,66 @@
 .backup-tools{margin-bottom:20px;display:flex;flex-wrap:wrap;gap:10px}.backup-tools p{flex-basis:100%;font-size:12px;color:#706b65;margin:0}.backup-modal .modal-body{max-height:75vh}.backup-modal p{font-size:13px;line-height:1.8}.backup-modal a{display:inline-block;text-decoration:none}.backup-modal details{margin:18px 0}.backup-records{max-height:220px;overflow:auto}.backup-records p{border-bottom:1px solid #ddd;padding:8px 0}.restore-confirm{display:flex;gap:10px;margin:20px 0;font-size:14px}.restore-confirm input{width:22px;height:22px;flex-shrink:0}.backup-modal input[type=file]{max-width:100%;font-size:16px}.backup-modal [data-status]{color:#8f432e}.backup-modal button{min-height:44px}
 
 .cloud-tools{background:#fff;border:1px solid #e8e3da;padding:15px;border-radius:10px;margin-bottom:24px}.cloud-tools button{margin:4px;min-height:44px}.cloud-tools p{font-size:13px;overflow-wrap:anywhere}.cloud-tools button:disabled{opacity:.5}.modal form>[role=status]{padding:8px 18px;color:#8f432e;font-size:13px}.restore-confirm{align-items:center}
+
+/* 営業入力：入力欄だけスクロールし、保存フッターを常に表示する。 */
+.entry-overlay {
+  bottom: auto;
+  top: var(--entry-viewport-top, 0px);
+  height: 100vh;
+  height: var(--entry-viewport-height, 100dvh);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+.entry-modal {
+  height: min(780px, calc(100vh - 40px));
+  height: min(780px, calc(var(--entry-viewport-height, 100dvh) - 40px));
+  max-height: calc(100vh - 40px);
+  max-height: calc(var(--entry-viewport-height, 100dvh) - 40px);
+  min-height: 0;
+  overflow: hidden;
+}
+.entry-modal > header { flex: 0 0 auto; }
+.entry-modal > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.entry-modal .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-block: 16px;
+}
+.entry-modal footer {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+}
+.entry-modal .modal-body > [role="status"] {
+  color: #8f432e;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.entry-modal button { min-height: 44px; }
+@media (max-width: 900px), (max-height: 500px) {
+  .entry-overlay {
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
+  }
+  .entry-modal {
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+  .entry-modal > header { border-radius: 0; padding: 12px 18px; }
+  .entry-modal footer {
+    border-radius: 0;
+    padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  /* iOSの入力時ズームを避け、キーボード表示中も表示範囲を安定させる。 */
+  .entry-modal input { font-size: 16px; }
+}
