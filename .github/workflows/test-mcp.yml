@@ -1,0 +1,22 @@
+name: MOKA読み取りMCPのテスト
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - run: npm ci --prefix functions --ignore-scripts
+      - run: npm test
+      - run: npm run test:mcp
+      - run: npm --prefix functions run check
+      - run: npm run build

@@ -1,0 +1,25 @@
+{
+  "name": "moka-mcp-readonly",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test": "node --test test/core.test.js test/app.integration.js",
+    "check": "node --check index.js && node --check app.js && node --check core.js && node --check public/login.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "express": "5.2.1",
+    "firebase-admin": "14.5.0",
+    "firebase-functions": "7.4.0",
+    "zod": "3.25.76"
+  },
+  "overrides": {
+    "gaxios": {
+      "uuid": "11.1.1"
+    }
+  }
+}

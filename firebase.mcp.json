@@ -1,0 +1,8 @@
+{
+  "functions": [{
+    "source": "functions",
+    "codebase": "moka-mcp-readonly",
+    "runtime": "nodejs22",
+    "ignore": ["node_modules", ".git", "test", "*.local", ".env*", "README.md"]
+  }]
+}
