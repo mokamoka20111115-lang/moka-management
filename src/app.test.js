@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 import { environment } from '../test-support/dom.js'
 import * as calculations from './calculations.js'
+import { bindModalViewport } from './modalViewport.js'
 import { moveMonth } from './monthNavigation.js'
 import { bindBackupControls } from './backupUI.js'
 import { openMigration } from './migrationUI.js'
@@ -13,7 +14,7 @@ async function appHarness({failSdk=false}={}) {
   const env=environment();Object.assign(globalThis,{document:env.document,localStorage:env.localStorage})
   let authChange
   const source=(await readFile(new URL('./main.js',import.meta.url),'utf8')).replace(/^import .* from .*\n/gm,'').replace("import('./firebaseClient.js')",'__firebaseImport()')
-  const context={...env,...calculations,moveMonth,bindBackupControls,openMigration,validateEntries,createBackup,STORAGE_KEY,console,alert:()=>{},__firebaseImport:()=>failSdk?Promise.reject(new Error('SDK offline')):Promise.resolve({initializeFirebase:async callback=>{authChange=callback;callback(null,null);return {login:async()=>{},logout:async()=>callback(null,null)}}})}
+  const context={...env,...calculations,moveMonth,bindModalViewport,bindBackupControls,openMigration,validateEntries,createBackup,STORAGE_KEY,console,alert:()=>{},__firebaseImport:()=>failSdk?Promise.reject(new Error('SDK offline')):Promise.resolve({initializeFirebase:async callback=>{authChange=callback;callback(null,null);return {login:async()=>{},logout:async()=>callback(null,null)}}})}
   vm.runInNewContext(source,context);await tick()
   return {...env,authChange:async(user,store)=>{authChange(user,store);await tick()}}
 }
@@ -117,4 +118,17 @@ test('未保存入力を開き直して復元し、明示的に下書きを破�
   const discard=modal.form.querySelectorAll('button').find(button=>button.textContent==='下書きを破棄')
   assert.ok(discard);discard.click()
   assert.equal(modalForm(env).input.value,'')
+})
+test('営業入力の保存フッターをスクロール領域から分離し、失敗メッセージは入力側へ置く',async()=>{
+  const env=await appHarness()
+  await env.authChange({uid:'alice'},{uid:'alice',load:async()=>({entries:[],revision:0}),save:async()=>{throw new Error('offline')}})
+  env.app.querySelector('[data-new]').click();const modal=modalForm(env)
+  assert.ok(modal.overlay.matches('.entry-overlay'))
+  assert.ok(modal.overlay.querySelector('.entry-modal'))
+  const body=modal.form.querySelector('.modal-body'),footer=modal.form.querySelector('footer')
+  assert.equal(footer.parent,modal.form);assert.notEqual(body,footer)
+  assert.equal(modal.save.parent,footer)
+  await modal.form.onsubmit({preventDefault(){}})
+  assert.match(body.textContent,/保存失敗/)
+  assert.equal(modal.save.disabled,false)
 })
