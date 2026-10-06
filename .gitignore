@@ -1,1 +1,8 @@
 dist/
+node_modules/
+.env*
+!functions/.env.example
+*.local
+firebase-debug.log*
+firestore-debug.log*
+*-service-account*.json
